@@ -1,0 +1,891 @@
+local Players      = game:GetService("Players")
+local UIS          = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local RunService   = game:GetService("RunService")
+local GuiService   = game:GetService("GuiService")
+local Lighting     = game:GetService("Lighting")
+
+local LP = Players.LocalPlayer
+local DECAL = "rbxassetid://130910831750255"
+
+local function killOld(parent)
+	pcall(function()
+		local o = parent:FindFirstChild("SsVirusTeam")
+		if o then o:Destroy() end
+	end)
+end
+killOld(game:GetService("CoreGui"))
+if LP then killOld(LP:FindFirstChildOfClass("PlayerGui")) end
+if gethui then pcall(function() killOld(gethui()) end) end
+pcall(function()
+	local b = Lighting:FindFirstChild("SsVirusBlur")
+	if b then b:Destroy() end
+end)
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "SsVirusTeam"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.IgnoreGuiInset = true
+ScreenGui.DisplayOrder = 999999
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+do
+	local ok = false
+	if gethui then
+		local g, res = pcall(gethui)
+		if g and res then ok = pcall(function() ScreenGui.Parent = res end) end
+	end
+	if not ok or not ScreenGui.Parent then ok = pcall(function() ScreenGui.Parent = game:GetService("CoreGui") end) end
+	if not ok or not ScreenGui.Parent then ScreenGui.Parent = LP:WaitForChild("PlayerGui") end
+end
+
+local Conns, Cleanups, destroyed = {}, {}, false
+local function bind(signal, fn) local c = signal:Connect(fn); table.insert(Conns, c); return c end
+
+local blur
+local function DestroyAll()
+	if destroyed then return end
+	destroyed = true
+	for _, c in ipairs(Conns) do pcall(function() c:Disconnect() end) end
+	for _, f in ipairs(Cleanups) do pcall(f) end
+	if blur then pcall(function() blur:Destroy() end) end
+	pcall(function() ScreenGui:Destroy() end)
+end
+ScreenGui.Destroying:Connect(DestroyAll)
+
+local isMobile = UIS.TouchEnabled and not UIS.MouseEnabled
+
+local CYAN   = Color3.fromRGB(70, 240, 255)
+local MAGENT = Color3.fromRGB(255, 70, 200)
+local VOID   = Color3.fromRGB(4, 6, 10)
+local PANEL  = Color3.fromRGB(7, 11, 16)
+local DIM    = Color3.fromRGB(140, 180, 190)
+local EASE, EASE2 = Enum.EasingStyle.Quint, Enum.EasingStyle.Back
+
+local function new(class, props, parent)
+	local o = Instance.new(class)
+	if props then for k, v in pairs(props) do o[k] = v end end
+	if parent then o.Parent = parent end
+	return o
+end
+local function corner(inst, r) return new("UICorner", {CornerRadius = UDim.new(0, r or 4)}, inst) end
+local function stroke(inst, color, thickness, transparency)
+	return new("UIStroke", {Color = color or CYAN, Thickness = thickness or 1, Transparency = transparency or 0.3}, inst)
+end
+local function tween(inst, info, props) local t = TweenService:Create(inst, info, props); t:Play(); return t end
+local function isPress(i) return i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch end
+local function isMove(i) return i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch end
+local function topInset() local ok, v = pcall(function() return GuiService:GetGuiInset().Y end); return (ok and v) or 0 end
+
+local logoImgs = {}
+local function logo(props, parent)
+	props.Image = DECAL
+	props.BackgroundTransparency = props.BackgroundTransparency or 1
+	local i = new("ImageLabel", props, parent)
+	table.insert(logoImgs, i)
+	return i
+end
+
+local STATUS_COLORS = {idle = DIM, ok = Color3.fromRGB(100, 255, 180), warn = Color3.fromRGB(255, 210, 90), err = Color3.fromRGB(255, 90, 110)}
+
+blur = new("BlurEffect", {Name = "SsVirusBlur", Size = 0}, Lighting)
+local function applyBlur(active) tween(blur, TweenInfo.new(0.4), {Size = active and (isMobile and 6 or 14) or 0}) end
+
+-- ===================== LOADING =====================
+local LoadingFrame = new("Frame", {Size = UDim2.new(1, 0, 1, 0), BackgroundColor3 = VOID, BackgroundTransparency = 0.04, BorderSizePixel = 0, ZIndex = 100}, ScreenGui)
+
+local LRing = new("Frame", {
+	AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -30),
+	Size = UDim2.new(0, 190, 0, 190), BackgroundTransparency = 1, ZIndex = 101,
+}, LoadingFrame)
+corner(LRing, 95)
+local ring1 = stroke(LRing, CYAN, 2, 0.35)
+
+local LRing2 = new("Frame", {
+	AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -30),
+	Size = UDim2.new(0, 220, 0, 220), BackgroundTransparency = 1, ZIndex = 101,
+}, LoadingFrame)
+corner(LRing2, 110)
+local ring2 = stroke(LRing2, MAGENT, 1, 0.6)
+
+local LLogo = logo({
+	Size = UDim2.new(0, 150, 0, 150), AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.new(0.5, 0, 0.5, -30), ZIndex = 102, ScaleType = Enum.ScaleType.Fit,
+}, LoadingFrame)
+
+local LTitle = new("TextLabel", {
+	BackgroundTransparency = 1, Size = UDim2.new(0, 500, 0, 30),
+	AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0.5, 90),
+	Text = "SSVIRUSTEAM", Font = Enum.Font.Code, TextSize = 26, TextColor3 = CYAN, ZIndex = 102,
+}, LoadingFrame)
+
+local LSub = new("TextLabel", {
+	BackgroundTransparency = 1, Size = UDim2.new(0, 500, 0, 18),
+	AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0.5, 122),
+	Text = "TEMPORAL LINK :: YEAR +200,000,000", Font = Enum.Font.Code, TextSize = 12, TextColor3 = DIM, ZIndex = 102,
+}, LoadingFrame)
+
+local BarTrack = new("Frame", {
+	Size = UDim2.new(0, 260, 0, 3), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0.5, 150),
+	BackgroundColor3 = CYAN, BackgroundTransparency = 0.85, BorderSizePixel = 0, ZIndex = 102,
+}, LoadingFrame)
+local BarFill = new("Frame", {Size = UDim2.new(0, 0, 1, 0), BackgroundColor3 = CYAN, BorderSizePixel = 0, ZIndex = 103}, BarTrack)
+
+local LCode = new("TextLabel", {
+	BackgroundTransparency = 1, Size = UDim2.new(0, 500, 0, 16),
+	AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0.5, 164),
+	Text = "", Font = Enum.Font.Code, TextSize = 11, TextColor3 = Color3.fromRGB(90, 140, 150), ZIndex = 102,
+}, LoadingFrame)
+
+local bootMsgs = {
+	"calibrating chrono-field...",
+	"decrypting ssvirusteam core...",
+	"syncing neural uplink...",
+	"rendering holo-interface...",
+}
+
+task.spawn(function()
+	local t = 0
+	while LoadingFrame.Parent and not destroyed do
+		local dt = RunService.Heartbeat:Wait()
+		t = t + dt
+		LRing.Rotation = (LRing.Rotation + 70 * dt) % 360
+		LRing2.Rotation = (LRing2.Rotation - 45 * dt) % 360
+		local p = (math.sin(t * 2.2) + 1) / 2
+		ring1.Transparency = 0.2 + p * 0.5
+		ring2.Transparency = 0.45 + p * 0.4
+		if math.random() < 0.02 then
+			LTitle.TextColor3 = MAGENT
+			task.delay(0.06, function() if LTitle.Parent then LTitle.TextColor3 = CYAN end end)
+		end
+	end
+end)
+
+applyBlur(true)
+
+-- ===================== RESOLUTION =====================
+local camera = workspace.CurrentCamera
+local viewport = camera and camera.ViewportSize or Vector2.new(1920, 1080)
+local function refreshViewport()
+	if camera then viewport = camera.ViewportSize end
+end
+
+local panelW, panelH = isMobile and 340 or 480, isMobile and 500 or 450
+do
+	refreshViewport()
+	panelW = math.min(panelW, viewport.X - 24)
+	panelH = math.min(panelH, viewport.Y - 24)
+end
+
+-- ===================== MAIN PANEL =====================
+local Main = new("Frame", {
+	Name = "Main", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 40),
+	Size = UDim2.new(0, panelW, 0, panelH), BackgroundColor3 = PANEL, BackgroundTransparency = 0.08,
+	BorderSizePixel = 0, Visible = false, ClipsDescendants = true, ZIndex = 10,
+}, ScreenGui)
+corner(Main, 6)
+local mainStroke = stroke(Main, CYAN, 1, 0.4)
+
+local function bracket(ax, ay, px, py, rot)
+	local f = new("Frame", {
+		Size = UDim2.new(0, 22, 0, 22), AnchorPoint = Vector2.new(ax, ay),
+		Position = UDim2.new(px, 0, py, 0), BackgroundTransparency = 1, Rotation = rot, ZIndex = 14,
+	}, Main)
+	new("Frame", {Size = UDim2.new(1, 0, 0, 2), BackgroundColor3 = CYAN, BorderSizePixel = 0, ZIndex = 14}, f)
+	new("Frame", {Size = UDim2.new(0, 2, 1, 0), BackgroundColor3 = CYAN, BorderSizePixel = 0, ZIndex = 14}, f)
+	return f
+end
+bracket(0, 0, 0, 0, 0)
+bracket(1, 0, 1, 0, 90)
+bracket(1, 1, 1, 1, 180)
+bracket(0, 1, 0, 1, 270)
+
+local Sweep = new("Frame", {
+	Size = UDim2.new(0, 2, 1, 0), BackgroundColor3 = CYAN, BackgroundTransparency = 0.7, BorderSizePixel = 0, ZIndex = 11,
+}, Main)
+task.spawn(function()
+	while Main.Parent and not destroyed do
+		if Main.Visible then
+			Sweep.Position = UDim2.new(0, 0, 0, 0)
+			tween(Sweep, TweenInfo.new(3.5, Enum.EasingStyle.Linear), {Position = UDim2.new(1, 0, 0, 0)})
+			task.wait(3.5)
+		else
+			task.wait(0.3)
+		end
+	end
+end)
+
+-- ===================== TOP BAR =====================
+local TopBar = new("Frame", {Size = UDim2.new(1, 0, 0, 56), BackgroundTransparency = 1, ZIndex = 12}, Main)
+new("Frame", {Size = UDim2.new(1, -24, 0, 1), Position = UDim2.new(0, 12, 1, 0), BackgroundColor3 = CYAN, BackgroundTransparency = 0.75, BorderSizePixel = 0, ZIndex = 12}, TopBar)
+
+local MiniLogo = logo({Size = UDim2.new(0, 34, 0, 34), Position = UDim2.new(0, 14, 0.5, -17), ZIndex = 13, ScaleType = Enum.ScaleType.Fit}, TopBar)
+
+new("TextLabel", {
+	BackgroundTransparency = 1, Size = UDim2.new(1, -250, 0, 20), Position = UDim2.new(0, 58, 0, 9),
+	Text = "SSVIRUSTEAM // TERMINAL", Font = Enum.Font.Code, TextSize = 15, TextColor3 = CYAN,
+	TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 13,
+}, TopBar)
+
+local StatusLabel = new("TextLabel", {
+	BackgroundTransparency = 1, Size = UDim2.new(1, -250, 0, 16), Position = UDim2.new(0, 58, 0, 30),
+	Text = "> status: idle", Font = Enum.Font.Code, TextSize = 11, TextColor3 = STATUS_COLORS.idle,
+	TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 13,
+}, TopBar)
+local function SetStatus(text, kind)
+	StatusLabel.Text = "> status: " .. tostring(text)
+	tween(StatusLabel, TweenInfo.new(0.25), {TextColor3 = STATUS_COLORS[kind or "idle"] or STATUS_COLORS.idle})
+end
+
+local function topBtn(text, xOffset, color)
+	local b = new("TextButton", {
+		Size = UDim2.new(0, 32, 0, 32), Position = UDim2.new(1, xOffset, 0.5, -16),
+		BackgroundColor3 = VOID, BackgroundTransparency = 0.2, Text = text, Font = Enum.Font.Code,
+		TextSize = 14, TextColor3 = color, AutoButtonColor = false, ZIndex = 13,
+	}, TopBar)
+	corner(b, 4)
+	stroke(b, color, 1, 0.5)
+	b.MouseEnter:Connect(function() tween(b, TweenInfo.new(0.15), {BackgroundTransparency = 0}) end)
+	b.MouseLeave:Connect(function() tween(b, TweenInfo.new(0.15), {BackgroundTransparency = 0.2}) end)
+	return b
+end
+local CloseBtn  = topBtn("X", -46, Color3.fromRGB(255, 90, 110))
+local MinBtn    = topBtn("_", -86, Color3.fromRGB(255, 210, 90))
+local ReloadBtn = topBtn("R", -126, Color3.fromRGB(100, 255, 180))
+
+-- ===================== NAV =====================
+local NavBar = new("Frame", {Size = UDim2.new(1, -28, 0, 40), Position = UDim2.new(0, 14, 0, 64), BackgroundColor3 = VOID, BackgroundTransparency = 0.25, ZIndex = 12}, Main)
+corner(NavBar, 4)
+stroke(NavBar, CYAN, 1, 0.6)
+local NavIndicator = new("Frame", {Size = UDim2.new(0.5, -4, 1, -6), Position = UDim2.new(0, 3, 0, 3), BackgroundColor3 = CYAN, BackgroundTransparency = 0.75, BorderSizePixel = 0, ZIndex = 12}, NavBar)
+corner(NavIndicator, 3)
+stroke(NavIndicator, CYAN, 1, 0.3)
+
+local function navTab(text, x)
+	return new("TextButton", {
+		Size = UDim2.new(0.5, 0, 1, 0), Position = UDim2.new(x, 0, 0, 0), BackgroundTransparency = 1,
+		Text = text, Font = Enum.Font.Code, TextSize = 13, TextColor3 = DIM, AutoButtonColor = false, ZIndex = 13,
+	}, NavBar)
+end
+local TabScripts = navTab("[ 01 :: SCRIPTS ]", 0)
+local TabInfo    = navTab("[ 02 :: INFO ]", 0.5)
+
+-- ===================== PAGES =====================
+local PageContainer = new("Frame", {Size = UDim2.new(1, -28, 1, -128), Position = UDim2.new(0, 14, 0, 116), BackgroundTransparency = 1, ClipsDescendants = true, ZIndex = 12}, Main)
+
+local function fadeIn(g, delay)
+	g.GroupTransparency = 1
+	task.delay(delay or 0, function() if g.Parent then tween(g, TweenInfo.new(0.35), {GroupTransparency = 0}) end end)
+end
+
+-- ---------- SCRIPTS PAGE ----------
+local ScriptsPage = new("Frame", {Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, ZIndex = 12}, PageContainer)
+
+local SearchFrame = new("Frame", {Size = UDim2.new(1, 0, 0, 34), BackgroundColor3 = VOID, BackgroundTransparency = 0.25, ZIndex = 12}, ScriptsPage)
+corner(SearchFrame, 4)
+local searchStroke = stroke(SearchFrame, CYAN, 1, 0.6)
+new("TextLabel", {Size = UDim2.new(0, 28, 1, 0), Position = UDim2.new(0, 6, 0, 0), BackgroundTransparency = 1, Text = ">", Font = Enum.Font.Code, TextSize = 14, TextColor3 = CYAN, ZIndex = 13}, SearchFrame)
+local SearchBox = new("TextBox", {
+	Size = UDim2.new(1, -42, 1, 0), Position = UDim2.new(0, 34, 0, 0), BackgroundTransparency = 1, Text = "",
+	PlaceholderText = "search_query...", PlaceholderColor3 = Color3.fromRGB(80, 110, 120), TextColor3 = CYAN,
+	Font = Enum.Font.Code, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, ClearTextOnFocus = false, ZIndex = 13,
+}, SearchFrame)
+SearchBox.Focused:Connect(function() tween(searchStroke, TweenInfo.new(0.2), {Transparency = 0.1}) end)
+SearchBox.FocusLost:Connect(function() tween(searchStroke, TweenInfo.new(0.2), {Transparency = 0.6}) end)
+
+local ChipsScroll = new("ScrollingFrame", {
+	Size = UDim2.new(1, 0, 0, 28), Position = UDim2.new(0, 0, 0, 42), BackgroundTransparency = 1, BorderSizePixel = 0,
+	ScrollBarThickness = 0, ScrollingDirection = Enum.ScrollingDirection.X, CanvasSize = UDim2.new(0, 0, 0, 0),
+	AutomaticCanvasSize = Enum.AutomaticSize.X, ZIndex = 12,
+}, ScriptsPage)
+new("UIListLayout", {FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder, VerticalAlignment = Enum.VerticalAlignment.Center}, ChipsScroll)
+
+local ListScroll = new("ScrollingFrame", {
+	Size = UDim2.new(1, 0, 1, -78), Position = UDim2.new(0, 0, 0, 78), BackgroundTransparency = 1, BorderSizePixel = 0,
+	ScrollBarThickness = 2, ScrollBarImageColor3 = CYAN, CanvasSize = UDim2.new(0, 0, 0, 0),
+	AutomaticCanvasSize = Enum.AutomaticSize.Y, ZIndex = 12,
+}, ScriptsPage)
+new("UIListLayout", {Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder}, ListScroll)
+new("UIPadding", {PaddingRight = UDim.new(0, 6), PaddingBottom = UDim.new(0, 8)}, ListScroll)
+
+local EmptyLabel = new("TextLabel", {
+	AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0), Size = UDim2.new(1, -30, 0, 80),
+	BackgroundTransparency = 1, Text = "", Font = Enum.Font.Code, TextSize = 12, TextWrapped = true, TextColor3 = DIM, ZIndex = 12,
+}, ScriptsPage)
+
+local entries, cards, chipBtns = {}, {}, {}
+local currentCat = "ALL"
+local refreshQueued = false
+
+local function runEntry(e)
+	SetStatus("executing " .. e.name .. "...", "warn")
+	task.spawn(function()
+		local ok, err = pcall(e.callback)
+		if ok then
+			SetStatus(e.name .. " complete", "ok")
+			VT_Notify(e.name, "executed successfully", "ok")
+		else
+			SetStatus("error in " .. e.name, "err")
+			VT_Notify("error", tostring(err):sub(1, 60), "err", 4)
+		end
+	end)
+end
+
+local function buildCard(e, index)
+	local card = new("CanvasGroup", {Size = UDim2.new(1, 0, 0, 50), BackgroundColor3 = VOID, BackgroundTransparency = 0.3, BorderSizePixel = 0, LayoutOrder = index, ZIndex = 12}, ListScroll)
+	corner(card, 4)
+	local cs = stroke(card, CYAN, 1, 0.65)
+	local scale = new("UIScale", {}, card)
+
+	new("TextLabel", {
+		Size = UDim2.new(1, -100, 0, 18), Position = UDim2.new(0, 12, 0, 7), BackgroundTransparency = 1,
+		Text = "> " .. e.name, Font = Enum.Font.Code, TextSize = 13, TextColor3 = CYAN,
+		TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 13,
+	}, card)
+	new("TextLabel", {
+		Size = UDim2.new(1, -100, 0, 14), Position = UDim2.new(0, 12, 0, 26), BackgroundTransparency = 1,
+		Text = e.desc or "tap to execute", Font = Enum.Font.Code, TextSize = 10, TextColor3 = DIM,
+		TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 13,
+	}, card)
+	local tag = new("TextLabel", {
+		AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.new(0, 0, 0, 18),
+		AutomaticSize = Enum.AutomaticSize.X, BackgroundColor3 = VOID, BackgroundTransparency = 0.2,
+		Text = "[" .. e.cat .. "]", Font = Enum.Font.Code, TextSize = 9, TextColor3 = MAGENT, ZIndex = 13,
+	}, card)
+	corner(tag, 3)
+	stroke(tag, MAGENT, 1, 0.5)
+	new("UIPadding", {PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8)}, tag)
+
+	local flash = new("Frame", {Size = UDim2.new(1, 0, 1, 0), BackgroundColor3 = CYAN, BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 14}, card)
+
+	local hit = new("TextButton", {Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Text = "", AutoButtonColor = false, ZIndex = 20}, card)
+	hit.MouseEnter:Connect(function() tween(card, TweenInfo.new(0.15), {BackgroundTransparency = 0.05}); tween(cs, TweenInfo.new(0.15), {Transparency = 0.1}) end)
+	hit.MouseLeave:Connect(function() tween(card, TweenInfo.new(0.15), {BackgroundTransparency = 0.3}); tween(cs, TweenInfo.new(0.15), {Transparency = 0.65}) end)
+	hit.InputBegan:Connect(function(i) if isPress(i) then tween(scale, TweenInfo.new(0.1), {Scale = 0.97}) end end)
+	hit.InputEnded:Connect(function(i) if isPress(i) then tween(scale, TweenInfo.new(0.2, EASE2), {Scale = 1}) end end)
+	hit.MouseButton1Click:Connect(function()
+		flash.BackgroundTransparency = 0.6
+		tween(flash, TweenInfo.new(0.4), {BackgroundTransparency = 1})
+		runEntry(e)
+	end)
+	return card
+end
+
+local function refreshList()
+	for _, c in ipairs(cards) do c:Destroy() end
+	cards = {}
+	local q = string.lower(SearchBox.Text)
+	local n = 0
+	for _, e in ipairs(entries) do
+		local catOk = (currentCat == "ALL") or (e.cat == currentCat)
+		local searchOk = (q == "") or string.find(string.lower(e.name), q, 1, true)
+		if catOk and searchOk then
+			n = n + 1
+			local c = buildCard(e, n)
+			fadeIn(c, math.min(n * 0.03, 0.3))
+			table.insert(cards, c)
+		end
+	end
+	EmptyLabel.Text = (n == 0) and ((#entries == 0) and "> NO MODULES LOADED" or "> NO MATCH FOUND") or ""
+end
+
+local function scheduleRefresh()
+	if refreshQueued then return end
+	refreshQueued = true
+	task.defer(function() refreshQueued = false; if not destroyed then refreshList() end end)
+end
+
+local function styleChips()
+	for cat, c in pairs(chipBtns) do
+		local sel = (cat == currentCat)
+		tween(c, TweenInfo.new(0.2), {BackgroundTransparency = sel and 0.1 or 0.3, TextColor3 = sel and CYAN or DIM})
+	end
+end
+
+local function rebuildChips()
+	for _, c in pairs(chipBtns) do c:Destroy() end
+	chipBtns = {}
+	local cats, seen = {"ALL"}, {ALL = true}
+	for _, e in ipairs(entries) do
+		if not seen[e.cat] then seen[e.cat] = true; table.insert(cats, e.cat) end
+	end
+	if not seen[currentCat] then currentCat = "ALL" end
+	for i, cat in ipairs(cats) do
+		local btn = new("TextButton", {
+			AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.new(0, 0, 0, 24), BackgroundColor3 = VOID,
+			BackgroundTransparency = 0.3, Text = cat, Font = Enum.Font.Code, TextSize = 11, TextColor3 = DIM,
+			AutoButtonColor = false, LayoutOrder = i, ZIndex = 13,
+		}, ChipsScroll)
+		corner(btn, 3)
+		stroke(btn, CYAN, 1, 0.6)
+		new("UIPadding", {PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10)}, btn)
+		chipBtns[cat] = btn
+		btn.MouseButton1Click:Connect(function() currentCat = cat; styleChips(); refreshList() end)
+	end
+	styleChips()
+end
+SearchBox:GetPropertyChangedSignal("Text"):Connect(scheduleRefresh)
+
+-- ---------- INFO PAGE ----------
+local InfoPage = new("ScrollingFrame", {
+	Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 2,
+	ScrollBarImageColor3 = CYAN, CanvasSize = UDim2.new(0, 0, 0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y,
+	Visible = false, ZIndex = 12,
+}, PageContainer)
+new("UIListLayout", {Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder}, InfoPage)
+new("UIPadding", {PaddingRight = UDim.new(0, 6), PaddingBottom = UDim.new(0, 10)}, InfoPage)
+
+local function panel(height, order)
+	local g = new("CanvasGroup", {Size = UDim2.new(1, 0, 0, height), BackgroundColor3 = VOID, BackgroundTransparency = 0.3, BorderSizePixel = 0, LayoutOrder = order, ZIndex = 12}, InfoPage)
+	corner(g, 4)
+	stroke(g, CYAN, 1, 0.65)
+	return g
+end
+
+local EmblemCard = panel(190, 1)
+local ringHold = new("Frame", {Size = UDim2.new(0, 100, 0, 100), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 16), BackgroundTransparency = 1, ZIndex = 13}, EmblemCard)
+corner(ringHold, 50)
+local emStroke = stroke(ringHold, CYAN, 2, 0.2)
+local EmblemImg = logo({Size = UDim2.new(1, -10, 1, -10), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0), ZIndex = 14, ScaleType = Enum.ScaleType.Fit}, ringHold)
+
+new("TextLabel", {Size = UDim2.new(1, 0, 0, 18), Position = UDim2.new(0, 0, 0, 124), BackgroundTransparency = 1, Text = "SSVIRUSTEAM", Font = Enum.Font.Code, TextSize = 15, TextColor3 = CYAN, ZIndex = 13}, EmblemCard)
+new("TextLabel", {Size = UDim2.new(1, -20, 0, 16), Position = UDim2.new(0, 10, 0, 144), BackgroundTransparency = 1, Text = "transmission received from +200,000,000y", Font = Enum.Font.Code, TextSize = 10, TextColor3 = DIM, ZIndex = 13}, EmblemCard)
+new("TextLabel", {Size = UDim2.new(1, -20, 0, 16), Position = UDim2.new(0, 10, 0, 162), BackgroundTransparency = 1, Text = "UI_BUILD :: 1.0.0-FUTURE", Font = Enum.Font.Code, TextSize = 10, TextColor3 = Color3.fromRGB(90, 140, 150), ZIndex = 13}, EmblemCard)
+
+task.spawn(function()
+	while EmblemCard.Parent and not destroyed do
+		RunService.Heartbeat:Wait()
+		if InfoPage.Visible then ringHold.Rotation = (ringHold.Rotation + 0.4) % 360 end
+	end
+end)
+
+-- ══════════════════════════════════════════════════════════════
+-- INFO FROM FRIEND'S PANEL
+-- ══════════════════════════════════════════════════════════════
+local READOUT = {
+	{"owner",     "C00LWHITE"},
+	{"owner 2",   "SSDEVIL"},
+	{"owner 3",   "Sskid"},
+	{"origin",    "ssvirusteam"},
+	{"build",     "chrono-stable"},
+	{"interface", "holo-terminal v1"},
+	{"uplink",    "active"},
+}
+for i, row in ipairs(READOUT) do
+	local g = panel(38, 1 + i)
+	new("TextLabel", {Size = UDim2.new(0.5, 0, 1, 0), Position = UDim2.new(0, 12, 0, 0), BackgroundTransparency = 1, Text = row[1], Font = Enum.Font.Code, TextSize = 12, TextColor3 = DIM, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 13}, g)
+	new("TextLabel", {Size = UDim2.new(0.5, -12, 1, 0), Position = UDim2.new(0.5, 0, 0, 0), BackgroundTransparency = 1, Text = row[2], Font = Enum.Font.Code, TextSize = 12, TextColor3 = CYAN, TextXAlignment = Enum.TextXAlignment.Right, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 13}, g)
+end
+
+new("TextLabel", {Size = UDim2.new(1, 0, 0, 20), BackgroundTransparency = 1, Text = "# SYSTEM", Font = Enum.Font.Code, TextSize = 11, TextColor3 = DIM, TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = 20, ZIndex = 12}, InfoPage)
+
+local blurOn = true
+local BlurCard = panel(44, 21)
+new("TextLabel", {Size = UDim2.new(0.6, 0, 1, 0), Position = UDim2.new(0, 12, 0, 0), BackgroundTransparency = 1, Text = "background blur", Font = Enum.Font.Code, TextSize = 12, TextColor3 = CYAN, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 13}, BlurCard)
+do
+	local btn = new("TextButton", {
+		Size = UDim2.new(0, 44, 0, 22), AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -12, 0.5, 0),
+		BackgroundColor3 = VOID, BackgroundTransparency = 0.2, Text = "", AutoButtonColor = false, ZIndex = 14,
+	}, BlurCard)
+	corner(btn, 11)
+	local bs = stroke(btn, CYAN, 1, 0.3)
+	local knob = new("Frame", {Size = UDim2.new(0, 16, 0, 16), AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(1, -19, 0.5, 0), BackgroundColor3 = CYAN, BorderSizePixel = 0, ZIndex = 15}, btn)
+	corner(knob, 8)
+	btn.MouseButton1Click:Connect(function()
+		blurOn = not blurOn
+		tween(bs, TweenInfo.new(0.2), {Transparency = blurOn and 0.3 or 0.7})
+		tween(knob, TweenInfo.new(0.25, EASE2), {Position = blurOn and UDim2.new(1, -19, 0.5, 0) or UDim2.new(0, 3, 0.5, 0)})
+		if Main.Visible then applyBlur(blurOn) end
+	end)
+end
+
+new("TextLabel", {Size = UDim2.new(1, 0, 0, 20), BackgroundTransparency = 1, Text = "SsVirusTeam // temporal interface", Font = Enum.Font.Code, TextSize = 10, TextColor3 = Color3.fromRGB(80, 110, 120), LayoutOrder = 99, ZIndex = 12}, InfoPage)
+
+-- ===================== TAB SWITCH =====================
+local currentTab = nil
+local function selectTab(name, force)
+	if currentTab == name and not force then return end
+	currentTab = name
+	local scriptsOn = (name == "scripts")
+	tween(NavIndicator, TweenInfo.new(0.35, EASE2), {Position = scriptsOn and UDim2.new(0, 3, 0, 3) or UDim2.new(0.5, 1, 0, 3)})
+	tween(TabScripts, TweenInfo.new(0.2), {TextColor3 = scriptsOn and CYAN or DIM})
+	tween(TabInfo, TweenInfo.new(0.2), {TextColor3 = (not scriptsOn) and CYAN or DIM})
+	local show, hide = scriptsOn and ScriptsPage or InfoPage, scriptsOn and InfoPage or ScriptsPage
+	hide.Visible = false
+	show.Visible = true
+	show.Position = UDim2.new(0, scriptsOn and -20 or 20, 0, 0)
+	tween(show, TweenInfo.new(0.35, EASE), {Position = UDim2.new(0, 0, 0, 0)})
+	if scriptsOn then refreshList() else
+		for i, ch in ipairs(InfoPage:GetChildren()) do if ch:IsA("CanvasGroup") then fadeIn(ch, math.min(i * 0.03, 0.4)) end end
+	end
+end
+TabScripts.MouseButton1Click:Connect(function() selectTab("scripts") end)
+TabInfo.MouseButton1Click:Connect(function() selectTab("info") end)
+
+-- ══════════════════════════════════════════════════════════════
+-- DRAG (FIXED)
+-- ══════════════════════════════════════════════════════════════
+local function clampToScreen(tl, size)
+	refreshViewport()
+	local top = topInset()
+	return Vector2.new(
+		math.clamp(tl.X, 0, math.max(0, viewport.X - size.X)),
+		math.clamp(tl.Y, top, math.max(top, viewport.Y - size.Y))
+	)
+end
+local function placeTopLeft(target, tl)
+	local a, sz = target.AnchorPoint, target.AbsoluteSize
+	target.Position = UDim2.fromOffset(tl.X + a.X * sz.X, tl.Y + a.Y * sz.Y)
+end
+
+local function makeDraggable(handle, target, onClick)
+	local dragging = false
+	local moved = false
+	local startPos = Vector2.new()
+	local startTL = Vector2.new()
+	local goal = Vector2.new()
+	local cur = Vector2.new()
+	local renderConn = nil
+
+	table.insert(Cleanups, function()
+		if renderConn then renderConn:Disconnect() end
+	end)
+
+	handle.InputBegan:Connect(function(input)
+		if not isPress(input) then return end
+		dragging = true
+		moved = false
+		startPos = input.Position
+		startTL = target.AbsolutePosition
+		goal = startTL
+		cur = startTL
+
+		if not renderConn then
+			renderConn = RunService.RenderStepped:Connect(function(dt)
+				if not target or not target.Parent then return end
+				local dist = (cur - goal).Magnitude
+				if dragging or dist > 0.5 then
+					cur = cur:Lerp(goal, math.min(1, dt * 20))
+					placeTopLeft(target, clampToScreen(cur, target.AbsoluteSize))
+					if not dragging and dist < 0.5 then
+						placeTopLeft(target, clampToScreen(goal, target.AbsoluteSize))
+						renderConn:Disconnect()
+						renderConn = nil
+					end
+				end
+			end)
+		end
+	end)
+
+	bind(UIS.InputChanged, function(input)
+		if not dragging or not isMove(input) then return end
+		local delta = input.Position - startPos
+		if delta.Magnitude > 6 then moved = true end
+		if moved then
+			goal = clampToScreen(startTL + Vector2.new(delta.X, delta.Y), target.AbsoluteSize)
+		end
+	end)
+
+	bind(UIS.InputEnded, function(input)
+		if not isPress(input) then return end
+		if not dragging then return end
+		dragging = false
+		if not moved and onClick then onClick() end
+	end)
+end
+makeDraggable(TopBar, Main)
+
+-- ===================== RESIZE HANDLE =====================
+local ResizeHandle = new("TextButton", {
+	AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -4, 1, -4),
+	Size = UDim2.new(0, 28, 0, 28), BackgroundTransparency = 1, Text = "", AutoButtonColor = false, ZIndex = 30,
+}, Main)
+for _, d in ipairs({{6, 18}, {12, 18}, {18, 18}, {12, 12}, {18, 12}, {18, 6}}) do
+	new("Frame", {Size = UDim2.new(0, 2, 0, 2), Position = UDim2.new(0, d[1], 0, d[2]), BackgroundColor3 = CYAN, BackgroundTransparency = 0.3, BorderSizePixel = 0, ZIndex = 31}, ResizeHandle)
+end
+
+do
+	local resizing, rStart, rStartSize, rStartTL
+	local MIN_W, MIN_H, MAX_W, MAX_H = 300, 340, 720, 640
+
+	ResizeHandle.InputBegan:Connect(function(input)
+		if not isPress(input) then return end
+		resizing = true
+		rStart = input.Position
+		rStartSize = Vector2.new(panelW, panelH)
+		rStartTL = Main.AbsolutePosition
+	end)
+
+	bind(UIS.InputChanged, function(input)
+		if not resizing or not isMove(input) then return end
+		refreshViewport()
+		local d = input.Position - rStart
+		local availW = math.max(MIN_W, math.min(MAX_W, viewport.X - rStartTL.X))
+		local availH = math.max(MIN_H, math.min(MAX_H, viewport.Y - rStartTL.Y))
+		panelW = math.clamp(rStartSize.X + d.X, math.min(MIN_W, availW), availW)
+		panelH = math.clamp(rStartSize.Y + d.Y, math.min(MIN_H, availH), availH)
+		Main.Size = UDim2.fromOffset(panelW, panelH)
+		placeTopLeft(Main, rStartTL)
+	end)
+
+	bind(UIS.InputEnded, function(input)
+		if isPress(input) then resizing = false end
+	end)
+end
+
+-- ===================== FLOATING BUTTON =====================
+local FloatBtn = new("ImageButton", {
+	Size = UDim2.new(0, 52, 0, 52), Position = UDim2.new(0, 20, 1, -86), BackgroundColor3 = VOID,
+	BackgroundTransparency = 0.2, Image = "", Visible = false, ZIndex = 50,
+}, ScreenGui)
+corner(FloatBtn, 26)
+local fbStroke = stroke(FloatBtn, CYAN, 1.5, 0.3)
+local FloatLogo = logo({Size = UDim2.new(1, -10, 1, -10), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0), ZIndex = 51, ScaleType = Enum.ScaleType.Fit}, FloatBtn)
+
+bind(ScreenGui:GetPropertyChangedSignal("AbsoluteSize"), function()
+	refreshViewport()
+	for _, t in ipairs({Main, FloatBtn}) do
+		if t.Visible then placeTopLeft(t, clampToScreen(t.AbsolutePosition, t.AbsoluteSize)) end
+	end
+end)
+
+if camera then
+	camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+		refreshViewport()
+		if Main.Visible then
+			placeTopLeft(Main, clampToScreen(Main.AbsolutePosition, Main.AbsoluteSize))
+		end
+		if FloatBtn.Visible then
+			placeTopLeft(FloatBtn, clampToScreen(FloatBtn.AbsolutePosition, FloatBtn.AbsoluteSize))
+		end
+	end)
+end
+
+-- ===================== OPEN / CLOSE =====================
+local ready, closing, minimized = false, false, false
+
+local function restoreFromMinimize()
+	if not minimized then return end
+	minimized = false
+	MinBtn.Text = "_"
+	NavBar.Visible = true
+	PageContainer.Visible = true
+	ResizeHandle.Visible = true
+end
+
+local function openPanel()
+	if closing or Main.Visible then return end
+	restoreFromMinimize()
+	FloatBtn.Visible = false
+	Main.Visible = true
+	Main.Size = UDim2.new(0, panelW * 0.85, 0, panelH * 0.85)
+	Main.BackgroundTransparency = 1
+	mainStroke.Transparency = 1
+	applyBlur(blurOn)
+	tween(Main, TweenInfo.new(0.4, EASE2), {Size = UDim2.new(0, panelW, 0, panelH), BackgroundTransparency = 0.08})
+	tween(mainStroke, TweenInfo.new(0.4), {Transparency = 0.4})
+end
+
+local function closePanel()
+	if closing or not Main.Visible then return end
+	closing = true
+	applyBlur(false)
+	local t = tween(Main, TweenInfo.new(0.3, EASE), {Size = UDim2.new(0, panelW * 0.85, 0, panelH * 0.85), BackgroundTransparency = 1})
+	tween(mainStroke, TweenInfo.new(0.3), {Transparency = 1})
+	t.Completed:Connect(function()
+		Main.Visible = false
+		FloatBtn.Visible = true
+		FloatBtn.Size = UDim2.new(0, 8, 0, 8)
+		tween(FloatBtn, TweenInfo.new(0.3, EASE2), {Size = UDim2.new(0, 52, 0, 52)})
+		closing = false
+	end)
+end
+
+local function togglePanel() if not ready then return end; if Main.Visible then closePanel() else openPanel() end end
+
+CloseBtn.MouseButton1Click:Connect(closePanel)
+makeDraggable(FloatBtn, FloatBtn, openPanel)
+
+MinBtn.MouseButton1Click:Connect(function()
+	minimized = not minimized
+	MinBtn.Text = minimized and "+" or "_"
+	if minimized then
+		NavBar.Visible, PageContainer.Visible, ResizeHandle.Visible = false, false, false
+		tween(Main, TweenInfo.new(0.35, EASE), {Size = UDim2.new(0, panelW, 0, 56)})
+	else
+		tween(Main, TweenInfo.new(0.4, EASE2), {Size = UDim2.new(0, panelW, 0, panelH)})
+		task.delay(0.15, function() NavBar.Visible, PageContainer.Visible, ResizeHandle.Visible = true, true, true end)
+	end
+end)
+
+local reloading = false
+ReloadBtn.MouseButton1Click:Connect(function()
+	if reloading then return end
+	reloading = true
+	tween(mainStroke, TweenInfo.new(0.15), {Color = MAGENT})
+	task.delay(0.3, function() if mainStroke.Parent then tween(mainStroke, TweenInfo.new(0.3), {Color = CYAN}) end end)
+	SearchBox.Text = ""
+	currentCat = "ALL"
+	styleChips()
+	ListScroll.CanvasPosition, InfoPage.CanvasPosition = Vector2.new(0, 0), Vector2.new(0, 0)
+	selectTab("scripts", true)
+	SetStatus("reloaded", "ok")
+	VT_Notify("reload", "interface refreshed", "info", 1.5)
+	task.wait(0.4)
+	reloading = false
+end)
+
+bind(UIS.InputBegan, function(input, processed)
+	if processed then return end
+	if input.KeyCode == Enum.KeyCode.RightShift then togglePanel() end
+end)
+
+-- ===================== TOASTS =====================
+local ToastHolder = new("Frame", {
+	AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, topInset() + 8), Size = UDim2.new(0, 300, 1, -60),
+	BackgroundTransparency = 1, ZIndex = 200,
+}, ScreenGui)
+new("UIListLayout", {Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Center}, ToastHolder)
+local TOAST_COLORS = {info = CYAN, ok = Color3.fromRGB(100, 255, 180), warn = Color3.fromRGB(255, 210, 90), err = Color3.fromRGB(255, 90, 110)}
+local toastOrder = 0
+
+function VT_Notify(title, text, kind, duration)
+	if destroyed then return end
+	kind = kind or "info"
+	duration = duration or 3
+	toastOrder = toastOrder + 1
+	local col = TOAST_COLORS[kind] or TOAST_COLORS.info
+
+	local wrap = new("Frame", {Size = UDim2.new(0, 280, 0, 54), BackgroundTransparency = 1, LayoutOrder = toastOrder, ZIndex = 200}, ToastHolder)
+	local card = new("CanvasGroup", {
+		Size = UDim2.new(1, 0, 1, 0), Position = UDim2.new(0, 0, 0, -16), BackgroundColor3 = VOID,
+		BackgroundTransparency = 0.08, GroupTransparency = 1, BorderSizePixel = 0, ZIndex = 201,
+	}, wrap)
+	corner(card, 4)
+	stroke(card, col, 1, 0.3)
+	new("Frame", {Size = UDim2.new(0, 3, 1, -16), Position = UDim2.new(0, 8, 0, 8), BackgroundColor3 = col, BorderSizePixel = 0, ZIndex = 202}, card)
+	new("TextLabel", {
+		Size = UDim2.new(1, -30, 0, 18), Position = UDim2.new(0, 22, 0, 8), BackgroundTransparency = 1,
+		Text = "[" .. tostring(title or "") .. "]", Font = Enum.Font.Code, TextSize = 12, TextColor3 = col,
+		TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 202,
+	}, card)
+	new("TextLabel", {
+		Size = UDim2.new(1, -30, 0, 16), Position = UDim2.new(0, 22, 0, 27), BackgroundTransparency = 1,
+		Text = tostring(text or ""), Font = Enum.Font.Code, TextSize = 11, TextColor3 = DIM,
+		TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 202,
+	}, card)
+
+	tween(card, TweenInfo.new(0.3, EASE2), {Position = UDim2.new(0, 0, 0, 0), GroupTransparency = 0})
+	task.delay(duration, function()
+		if not card.Parent then return end
+		tween(card, TweenInfo.new(0.25, EASE), {Position = UDim2.new(0, 0, 0, -12), GroupTransparency = 1})
+		task.wait(0.22)
+		if not wrap.Parent then return end
+		local t = tween(wrap, TweenInfo.new(0.2, EASE), {Size = UDim2.new(0, 280, 0, 0)})
+		t.Completed:Wait()
+		wrap:Destroy()
+	end)
+end
+
+-- ===================== ANIM LOOP =====================
+bind(RunService.Heartbeat, function(dt)
+	if Main.Visible then
+		MiniLogo.Rotation = (MiniLogo.Rotation + 12 * dt) % 360
+		EmblemImg.Rotation = (EmblemImg.Rotation + 12 * dt) % 360
+	end
+	if FloatBtn.Visible then
+		FloatLogo.Rotation = (FloatLogo.Rotation + 16 * dt) % 360
+	end
+end)
+
+-- ===================== PUBLIC API =====================
+local VT = {Version = "1.0.0"}
+function VT.AddButton(name, callback, category, description)
+	table.insert(entries, {name = tostring(name), callback = callback or function() end, cat = category or "GENERAL", desc = description})
+	rebuildChips()
+	scheduleRefresh()
+end
+function VT.Notify(...) VT_Notify(...) end
+function VT.SetStatus(...) SetStatus(...) end
+function VT.Open() openPanel() end
+function VT.Close() closePanel() end
+function VT.Toggle() togglePanel() end
+function VT.Destroy() DestroyAll() end
+
+pcall(function() if getgenv then getgenv().SsVirusTeam = VT end end)
+pcall(function() _G.SsVirusTeam = VT end)
+
+-- ══════════════════════════════════════════════════════════════
+-- FRIEND'S SCRIPTS (19)
+-- ══════════════════════════════════════════════════════════════
+local function mk(url)
+	return function() loadstring(game:HttpGet(url))() end
+end
+
+local FRIEND_SCRIPTS = {
+	{"Cynatica Hub", "Universal Script", "https://gist.githubusercontent.com/OfficialCynatica/636bed3e9ba0088733feb986768f8015/raw", "MISC"},
+	{"FE Ac6 Music", "Music Vulnerability", "https://rawscripts.net/raw/Universal-Script-FE-Ac6-Music-Vulnerability-25536", "MISC"},
+	{"Foxname Hub", "99 Nights in the Forest", "https://rawscripts.net/raw/99-Nights-in-the-Forest-Foxname-Hub-Made-By-EchoBuddyYTT-110418", "MISC"},
+	{"Hexagon", "Brookhaven", "https://raw.githubusercontent.com/nxvap/Hexagon/refs/heads/main/brookhaven", "MISC"},
+	{"Lalol Hub", "Backdoor Scanner", "https://rawscripts.net/raw/Universal-Script-LALOL-Hub-Backdoor-Scanner-Without-the-Hint-52003", "BACKDOOR"},
+	{"Pwnmaster99", "Universal Stuffs", "https://rawscripts.net/raw/Universal-Script-Pwnmaster99s-Universal-Stuffs-205984", "TROLL"},
+	{"Filing All", "Ultimate Fling GUI", "https://raw.githubusercontent.com/K1LAS1K/Ultimate-Fling-GUI/main/flingscript.lua", "TROLL"},
+	{"Sskid Backdoor", "Backdoor Script", "https://raw.githubusercontent.com/sepehrali1/Sskid/refs/heads/main/Sskidbackdoor", "BACKDOOR"},
+	{"Wall Hop", "Universal Wall Hop", "https://rawscripts.net/raw/Universal-Script-Wall-hop-99778", "TROLL"},
+	{"TimurSide", "Backdoor Script", "https://rawscripts.net/raw/Universal-Script-TimurSide-backdoor-224728", "BACKDOOR"},
+	{"SCP-096 GUI", "Universal SCP GUI", "https://rawscripts.net/raw/Universal-Script-SCP-096-GUI-UNIVERSIAL-41936", "MISC"},
+	{"Sword Kill All", "GUI Sword Kill All V6", "https://rawscripts.net/raw/Universal-Script-GUI-Sword-Kill-all-V6-47125", "TROLL"},
+	{"Epic Backdoor", "SS Executor", "https://rawscripts.net/raw/Universal-Script-Epic-Backdoor-SS-Executor-227858", "BACKDOOR"},
+	{"Fi Pipazz", "New Universal Script", "https://rawscripts.net/raw/Universal-Script-Fi-pipazz-new-106126", "BACKDOOR"},
+	{"Super Ring", "Ring Script", "https://raw.githubusercontent.com/sepehrali1/Super-ring1/refs/heads/main/Super%20ring", "TROLL"},
+	{"Sskidf3x", "SS Script", "https://raw.githubusercontent.com/sepehrali1/Sskidf3x/refs/heads/main/Ss", "F3X"},
+	{"God Mode", "Universal God Mode", "https://raw.githubusercontent.com/Rawbr10/Roblox-Scripts/refs/heads/main/God%20Mode%20Script%20Universal", "MISC"},
+	{"PulseZax Loader", "Universal Loader", "https://raw.githubusercontent.com/PulseZax/Loader/refs/heads/main/.lua", "MISC"},
+	{"Fly V3", "Fly by Hibatzzz", "https://rawscripts.net/raw/Universal-Script-fly-v3-by-hibatzzz-243731", "MISC"},
+}
+
+for _, s in ipairs(FRIEND_SCRIPTS) do
+	VT.AddButton(s[1], mk(s[3]), s[4], s[2])
+end
+
+rebuildChips()
+
+-- ===================== INTRO =====================
+task.spawn(function()
+	tween(BarFill, TweenInfo.new(2.6, Enum.EasingStyle.Sine), {Size = UDim2.new(1, 0, 1, 0)})
+	for _, m in ipairs(bootMsgs) do
+		if destroyed then return end
+		LCode.Text = "> " .. m
+		task.wait(0.65)
+	end
+	if destroyed then return end
+
+	tween(LoadingFrame, TweenInfo.new(0.5), {BackgroundTransparency = 1})
+	tween(LTitle, TweenInfo.new(0.35), {TextTransparency = 1})
+	tween(LSub, TweenInfo.new(0.35), {TextTransparency = 1})
+	tween(LCode, TweenInfo.new(0.35), {TextTransparency = 1})
+	tween(BarTrack, TweenInfo.new(0.35), {BackgroundTransparency = 1})
+	tween(BarFill, TweenInfo.new(0.35), {BackgroundTransparency = 1})
+	tween(LLogo, TweenInfo.new(0.4), {ImageTransparency = 1})
+	tween(ring1, TweenInfo.new(0.35), {Transparency = 1})
+	tween(ring2, TweenInfo.new(0.35), {Transparency = 1})
+
+	task.wait(0.55)
+	if destroyed then return end
+	LoadingFrame:Destroy()
+
+	Main.Visible = true
+	Main.Size = UDim2.new(0, panelW * 0.7, 0, panelH * 0.7)
+	Main.BackgroundTransparency = 1
+	mainStroke.Transparency = 1
+	tween(Main, TweenInfo.new(0.6, EASE2), {Size = UDim2.new(0, panelW, 0, panelH), Position = UDim2.new(0.5, 0, 0.5, 0), BackgroundTransparency = 0.08})
+	tween(mainStroke, TweenInfo.new(0.6), {Transparency = 0.4})
+
+	selectTab("scripts", true)
+	ready = true
+
+	task.wait(0.5)
+	VT_Notify("uplink", "ssvirusteam interface online", "ok")
+end)
+
+print("[SsVirusTeam] interface loaded — 19 scripts.")
